@@ -1,1 +1,55 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quotes Social</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header>
+        <h1>✨ QuoteSpace</h1>
+        <p>Share inspiration. Spread positivity.</p>
+    </header>
+
+    <main>
+        <div class="post">
+            <div class="profile">
+                <div class="avatar">Q</div>
+                <div>
+                    <h3>Quote from Japan!</h3>
+                    <span>Shared with everyone 🌍</span>
+                </div>
+            </div>
+
+            <img src="quote.jpg" alt="Tokugawa-Leyasu's Quote Image"
+                 class="quote-image">
+
+            <div class="post-content">
+                <h2>A little inspiration goes a long way.</h2>
+                <p>What do you think about this quote?</p>
+
+                <div class="actions">
+                    <button id="likeButton" onclick="likePost()">
+                        ❤️ Like
+                    </button>
+
+                    <span id="likeCount">0 likes</span>
+                </div>
+
+                <p class="thanks" id="thanks"></p>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        Made with effort for a school project
+    </footer>
+
+    <script type="module" src="script.js"></script>
+
+</body>
+</html>
+
