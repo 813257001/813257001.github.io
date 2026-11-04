@@ -1,74 +1,68 @@
 
-import { initializeApp } from
-"https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+const button = document.getElementById("likeButton");
+const counter = document.getElementById("counter");
 
-import {
-    getFirestore,
-    doc,
-    onSnapshot,
-    runTransaction
-} from
-"https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+// Your shared online counter
+const COUNTER_URL = "https://abacus.jasoncameron.dev";
+const COUNTER_ID = "school-quote-project-84729";
 
-// Replace these values with your Firebase project details
-const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT.firebasestorage.app",
-    messagingSenderId: "YOUR_SENDER_ID",
-    appId: "YOUR_APP_ID"
-};
+// Load the shared like count
+async function loadLikes() {
+    try {
+        const response = await fetch(
+            `${COUNTER_URL}/get/${COUNTER_ID}/likes`
+        );
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+        if (!response.ok) {
+            throw new Error("Failed to load likes");
+        }
 
-// This is the shared post
-const postRef = doc(db, "posts", "quote");
+        const data = await response.json();
 
-const likeCount = document.getElementById("likeCount");
-const likeButton = document.getElementById("likeButton");
-const thanks = document.getElementById("thanks");
+        counter.textContent =
+            `${data.value} ${data.value === 1 ? "Like" : "Likes"}`;
 
-// Listen for updates from every device
-onSnapshot(postRef, (snapshot) => {
-    if (snapshot.exists()) {
-        const likes = snapshot.data().likes || 0;
+    } catch (error) {
+        console.error("Counter error:", error);
+        counter.textContent = "Likes unavailable";
+    }
+}
 
-        likeCount.textContent =
-            likes + (likes === 1 ? " like" : " likes");
-    } else {
-        likeCount.textContent = "Post not set up";
+// Add one like for everyone
+button.addEventListener("click", async function () {
+
+    button.disabled = true;
+    button.textContent = "❤️ Liking...";
+
+    try {
+        const response = await fetch(
+            `${COUNTER_URL}/hit/${COUNTER_ID}/likes`
+        );
+
+        if (!response.ok) {
+            throw new Error("Could not add like");
+        }
+
+        const data = await response.json();
+
+        counter.textContent =
+            `${data.value} ${data.value === 1 ? "Like" : "Likes"}`;
+
+        button.textContent = "❤️ Liked!";
+
+    } catch (error) {
+        console.error("Like error:", error);
+
+        button.textContent = "❤️ Try Again";
+        alert("Something went wrong. Please try again.");
+
+    } finally {
+        button.disabled = false;
     }
 });
 
-// Every click adds one like
-window.likePost = async function () {
-    likeButton.disabled = true;
-    thanks.textContent = "Adding your like...";
+// Get the latest count when the website opens
+loadLikes();
 
-    try {
-        await runTransaction(db, async (transaction) => {
-            const snapshot = await transaction.get(postRef);
-
-            if (!snapshot.exists()) {
-                throw new Error("Post does not exist!");
-            }
-
-            const currentLikes = snapshot.data().likes || 0;
-
-            transaction.update(postRef, {
-                likes: currentLikes + 1
-            });
-        });
-
-        thanks.textContent = "❤️ Thanks for supporting this quote!";
-
-    } catch (error) {
-        console.error(error);
-        thanks.textContent = "Something went wrong. Try again.";
-    } finally {
-        likeButton.disabled = false;
-    }
-};
-
+// Automatically refresh every 5 seconds
+setInterval(loadLikes, 5000);
