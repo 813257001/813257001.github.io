@@ -1,68 +1,114 @@
 
+// ======================================
+// SUPABASE CONFIGURATION
+// ======================================
+
+const SUPABASE_URL = "https://rcynsjgtwtrutmkmgdvw.supabase.co";
+
+const SUPABASE_KEY = "sb_publishable_auW4qNTYQ_6i4ybjVxUfuw_E95x4U72";
+
+// ======================================
+// HTML ELEMENTS
+// ======================================
+
 const button = document.getElementById("likeButton");
-const counter = document.getElementById("counter");
+const counter = document.getElementById("likeCount");
 
-// Your shared online counter
-const COUNTER_URL = "https://abacus.jasoncameron.dev";
-const COUNTER_ID = "school-quote-project-84729";
+// ======================================
+// SUPABASE REQUEST
+// ======================================
 
-// Load the shared like count
+async function apiRequest(path, options = {}) {
+    const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/${path}`,
+        {
+            ...options,
+            headers: {
+                "apikey": SUPABASE_KEY,
+                "Authorization": `Bearer ${SUPABASE_KEY}`,
+                "Content-Type": "application/json",
+                ...options.headers
+            }
+        }
+    );
+
+    if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error || "Request failed");
+    }
+
+    return response.json();
+}
+
+// ======================================
+// UPDATE THE DISPLAY
+// ======================================
+
+function displayLikes(count) {
+    const number = Number(count);
+
+    counter.textContent =
+        `${number.toLocaleString()} ${number === 1 ? "Like" : "Likes"}`;
+}
+
+// ======================================
+// LOAD SHARED LIKE COUNT
+// ======================================
+
 async function loadLikes() {
     try {
-        const response = await fetch(
-            `${COUNTER_URL}/get/${COUNTER_ID}/likes`
+        const data = await apiRequest(
+            "like_counter?id=eq.1&select=count"
         );
 
-        if (!response.ok) {
-            throw new Error("Failed to load likes");
+        if (data.length > 0) {
+            displayLikes(data[0].count);
         }
-
-        const data = await response.json();
-
-        counter.textContent =
-            `${data.value} ${data.value === 1 ? "Like" : "Likes"}`;
-
     } catch (error) {
-        console.error("Counter error:", error);
-        counter.textContent = "Likes unavailable";
+        console.error("Could not load likes:", error);
     }
 }
 
-// Add one like for everyone
-button.addEventListener("click", async function () {
+// ======================================
+// ADD A LIKE
+// ======================================
+
+async function likePost() {
+    if (button.disabled) return;
 
     button.disabled = true;
-    button.textContent = "❤️ Liking...";
 
     try {
-        const response = await fetch(
-            `${COUNTER_URL}/hit/${COUNTER_ID}/likes`
+        const data = await apiRequest(
+            "rpc/increment_likes",
+            {
+                method: "POST",
+                body: JSON.stringify({})
+            }
         );
 
-        if (!response.ok) {
-            throw new Error("Could not add like");
-        }
+        displayLikes(data);
 
-        const data = await response.json();
-
-        counter.textContent =
-            `${data.value} ${data.value === 1 ? "Like" : "Likes"}`;
-
-        button.textContent = "❤️ Liked!";
-
+        button.classList.add("liked");
     } catch (error) {
-        console.error("Like error:", error);
-
-        button.textContent = "❤️ Try Again";
-        alert("Something went wrong. Please try again.");
-
+        console.error("Could not add like:", error);
+        alert("Couldn't save your like. Please try again.");
     } finally {
         button.disabled = false;
     }
-});
+}
 
-// Get the latest count when the website opens
-loadLikes();
+// ======================================
+// INITIALIZE
+// ======================================
 
-// Automatically refresh every 5 seconds
-setInterval(loadLikes, 5000);
+if (button && counter) {
+    button.addEventListener("click", likePost);
+
+    loadLikes();
+
+    // Refresh shared count every 5 seconds
+    setInterval(loadLikes, 5000);
+} else {
+    console.error("Like button or counter element not found!");
+}
