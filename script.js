@@ -1,318 +1,727 @@
 
-const STORAGE_KEY = "thoughtly_posts_v1";
+// ==========================================
+// THOUGHTLY - SOCIAL NETWORK
+// ==========================================
 
-// Your ORIGINAL school project post.
-// It is automatically added the first time the website runs.
+// 1. SUPABASE CONFIGURATION
+// Replace these two values with your own Supabase credentials.
 
-const originalPost = {
-    id: "original-post",
-    author: "Mohtad Abdullah Qutab",
-    title: "A little inspiration goes a long way.",
-    text: "What do you think about this quote?",
-    image: "quote.jpg",
-    date: "Original post",
-    likes: 0,
-    liked: false,
-    original: true
-};
+const SUPABASE_URL = "YOUR_SUPABASE_PROJECT_URL";
+const SUPABASE_KEY = "YOUR_SUPABASE_ANON_KEY";
 
-const feed = document.getElementById("feed");
-const form = document.getElementById("postForm");
-const imageInput = document.getElementById("postImage");
-const preview = document.getElementById("imagePreview");
+const db = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_KEY
+);
 
-let posts = loadPosts();
-let selectedImage = "";
+// 2. APP STATE
 
-// LOAD SAVED POSTS
+let currentUser = null;
+let currentProfile = null;
+let currentMode = "login";
+let currentFilter = "all";
+let currentSearch = "";
+let posts = [];
+let likedPosts = new Set();
+let toastTimer = null;
 
-function loadPosts() {
-    try {
-        const saved = localStorage.getItem(STORAGE_KEY);
+// 3. ELEMENTS
 
-        if (saved) {
-            const parsed = JSON.parse(saved);
+const $ = id => document.getElementById(id);
 
-            if (Array.isArray(parsed)) {
-                // Preserve the original post even if old saved
-                // data does not contain it.
-                if (!parsed.some(p => p.id === originalPost.id)) {
-                    parsed.push(originalPost);
-                }
+const authScreen = $("authScreen");
+const app = $("app");
+const authForm = $("authForm");
+const authMessage = $("authMessage");
+const feed = $("feed");
 
-                return parsed;
-            }
+// 4. UTILITIES
+
+function escapeHTML(value) {
+  return String(value ?? "").replace(/[&<>"']/g, char => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[char]);
+}
+
+function initials(name) {
+  return (name || "?").trim().charAt(0).toUpperCase();
+}
+
+function showToast(message) {
+  const toast = $("toast");
+  toast.textContent = message;
+  toast.classList.add("show");
+
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toast.classList.remove("show");
+  }, 2600);
+}
+
+function formatDate(date) {
+  const value = new Date(date);
+  return value.toLocaleString([], {
+    dateStyle: "medium",
+    timeStyle: "short"
+  });
+}
+
+function setLoading(message) {
+  feed.innerHTML = `<div class="loading">${escapeHTML(message)}</div>`;
+}
+
+// 5. AUTHENTICATION UI
+
+function setAuthMode(mode) {
+  currentMode = mode;
+
+  $("loginTab").classList.toggle("active", mode === "login");
+  $("signupTab").classList.toggle("active", mode === "signup");
+
+  $("usernameField").classList.toggle("hidden", mode !== "signup");
+
+  $("authSubmit").textContent =
+    mode === "login" ? "Log in" : "Create account";
+
+  authMessage.textContent = "";
+}
+
+$("loginTab").addEventListener("click", () => setAuthMode("login"));
+$("signupTab").addEventListener("click", () => setAuthMode("signup"));
+
+authForm.addEventListener("submit", async event => {
+  event.preventDefault();
+
+  const email = $("emailInput").value.trim();
+  const password = $("passwordInput").value;
+  const username = $("usernameInput").value.trim().toLowerCase();
+
+  const button = $("authSubmit");
+
+  button.disabled = true;
+  button.textContent = "Please wait...";
+  authMessage.textContent = "";
+
+  try {
+    if (currentMode === "signup") {
+      if (!/^[a-z0-9_]{3,24}$/.test(username)) {
+        throw new Error(
+          "Username must be 3-24 characters (letters, numbers and underscores)."
+        );
+      }
+
+      const { data, error } = await db.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            username: username
+          }
         }
-    } catch (error) {
-        console.error("Could not load posts:", error);
+      });
+
+      if (error) throw error;
+
+      if (!data.session) {
+        authMessage.style.color = "var(--green)";
+        authMessage.textContent =
+          "Account created! Check your email to confirm your account.";
+      } else {
+        showToast("Welcome to Thoughtly!");
+      }
+    } else {
+      const { error } = await db.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) throw error;
+    }
+  } catch (error) {
+    authMessage.style.color = "#d34c4c";
+    authMessage.textContent = error.message;
+  } finally {
+    button.disabled = false;
+    button.textContent =
+      currentMode === "login" ? "Log in" : "Create account";
+  }
+});
+
+// 6. SESSION MANAGEMENT
+
+async function initializeApp() {
+  const { data, error } = await db.auth.getSession();
+
+  if (error) {
+    showToast(error.message);
+    return;
+  }
+
+  if (data.session) {
+    await loadUser(data.session.user);
+  } else {
+    showAuth();
+  }
+
+  db.auth.onAuthStateChange((event, session) => {
+    if (event === "SIGNED_OUT") {
+      currentUser = null;
+      currentProfile = null;
+      showAuth();
     }
 
-    return [originalPost];
+    if (event === "SIGNED_IN" && session) {
+      loadUser(session.user);
+    }
+  });
 }
 
-// SAVE POSTS
-
-function savePosts() {
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
-        return true;
-    } catch (error) {
-        alert("Storage is full. Try using a smaller image.");
-        console.error(error);
-        return false;
-    }
+function showAuth() {
+  authScreen.classList.remove("hidden");
+  app.classList.add("hidden");
 }
 
-// CREATE AN ELEMENT SAFELY
+async function loadUser(user) {
+  currentUser = user;
 
-function makeElement(tag, className, content) {
-    const element = document.createElement(tag);
+  const { data: profile, error } = await db
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .single();
 
-    if (className) {
-        element.className = className;
-    }
+  if (error) {
+    showToast("Couldn't load your profile: " + error.message);
+    return;
+  }
 
-    if (content !== undefined) {
-        element.textContent = content;
-    }
+  currentProfile = profile;
 
-    return element;
+  authScreen.classList.add("hidden");
+  app.classList.remove("hidden");
+
+  updateProfileUI();
+  await loadFeed();
 }
 
-// DISPLAY POSTS
+function updateProfileUI() {
+  const name = currentProfile.username || "User";
+  const avatar = initials(name);
 
-function renderPosts() {
-    feed.replaceChildren();
+  $("sideName").textContent = name;
+  $("sideUsername").textContent = "@" + name;
+  $("sideAvatar").textContent = avatar;
+  $("composerAvatar").textContent = avatar;
+  $("profileBtn").textContent = avatar;
+}
 
-    const sortedPosts = [...posts].reverse();
+// 7. LOG OUT
 
-    document.getElementById("postCount").textContent =
-        `${posts.length} ${posts.length === 1 ? "post" : "posts"}`;
+$("logoutBtn").addEventListener("click", async () => {
+  const { error } = await db.auth.signOut();
 
-    if (sortedPosts.length === 0) {
-        feed.append(
-            makeElement("div", "empty-feed", "No posts yet. Be the first to share something!")
-        );
-        return;
-    }
+  if (error) showToast(error.message);
+  else showToast("Logged out successfully.");
+});
 
-    sortedPosts.forEach(post => {
-        const card = makeElement("article", "post");
+// 8. CREATE POSTS
 
-        // HEADER
+$("postInput").addEventListener("input", event => {
+  $("charCount").textContent =
+    `${event.target.value.length} / 3000`;
+});
 
-        const header = makeElement("div", "post-header");
+$("publishBtn").addEventListener("click", createPost);
 
-        const avatar = makeElement(
-            "div",
-            "avatar",
-            post.author.charAt(0).toUpperCase()
-        );
+async function createPost() {
+  const content = $("postInput").value.trim();
 
-        const authorInfo = document.createElement("div");
+  if (!content) {
+    showToast("Write something first!");
+    return;
+  }
 
-        authorInfo.append(
-            makeElement("div", "post-author", post.author),
-            makeElement("div", "post-date", post.date)
-        );
+  if (content.length > 3000) {
+    showToast("Your post is too long.");
+    return;
+  }
 
-        header.append(avatar, authorInfo);
+  const button = $("publishBtn");
+  button.disabled = true;
+  button.textContent = "Publishing...";
 
-        // CONTENT
+  try {
+    const { error } = await db
+      .from("posts")
+      .insert({
+        user_id: currentUser.id,
+        content: content
+      });
 
-        const body = makeElement("div", "post-body");
+    if (error) throw error;
 
-        body.append(
-            makeElement("h3", "", post.title),
-            makeElement("p", "", post.text)
-        );
+    $("postInput").value = "";
+    $("charCount").textContent = "0 / 3000";
 
-        // IMAGE
+    showToast("Your post is live! 🌱");
+    await loadFeed();
 
-        if (post.image) {
-            const img = document.createElement("img");
-            img.className = "post-image";
-            img.src = post.image;
-            img.alt = post.title;
-            img.loading = "lazy";
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = "＋ Publish post";
+  }
+}
 
-            card.append(header, img, body);
-        } else {
-            card.append(header, body);
-        }
+// 9. LOAD FEED
 
-        // LIKE COUNT
+async function loadFeed() {
+  setLoading("Loading community posts...");
 
-        const stats = makeElement("div", "post-stats");
+  try {
+    const { data: postData, error } = await db
+      .from("posts")
+      .select(`
+        *,
+        profiles!posts_user_id_fkey(username)
+      `)
+      .order("created_at", { ascending: false });
 
-        stats.append(
-            makeElement(
-                "span",
-                "",
-                `❤️ ${post.likes} ${post.likes === 1 ? "like" : "likes"}`
-            )
-        );
+    if (error) throw error;
 
-        // ACTION BUTTONS
+    posts = postData || [];
 
-        const actions = makeElement("div", "post-actions");
+    const { data: likeData, error: likeError } = await db
+      .from("likes")
+      .select("post_id")
+      .eq("user_id", currentUser.id);
 
-        const likeButton = makeElement(
-            "button",
-            `action-btn ${post.liked ? "liked" : ""}`,
-            post.liked ? "❤️ Liked" : "♡ Like"
-        );
+    if (likeError) throw likeError;
 
-        likeButton.type = "button";
+    likedPosts = new Set(
+      (likeData || []).map(item => item.post_id)
+    );
 
-        likeButton.addEventListener("click", () => {
-            toggleLike(post.id);
+    renderFeed();
+
+  } catch (error) {
+    feed.innerHTML = `
+      <div class="empty-state">
+        Couldn't load the feed.<br><br>
+        ${escapeHTML(error.message)}
+      </div>
+    `;
+  }
+}
+
+// 10. RENDER POSTS
+
+function renderFeed() {
+  let filtered = [...posts];
+
+  if (currentFilter === "mine") {
+    filtered = filtered.filter(
+      post => post.user_id === currentUser.id
+    );
+  }
+
+  if (currentFilter === "liked") {
+    filtered = filtered.filter(
+      post => likedPosts.has(post.id)
+    );
+  }
+
+  if (currentSearch) {
+    filtered = filtered.filter(post => {
+      const username = post.profiles?.username || "";
+
+      return (
+        post.content.toLowerCase().includes(currentSearch) ||
+        username.toLowerCase().includes(currentSearch)
+      );
+    });
+  }
+
+  if (!filtered.length) {
+    feed.innerHTML = `
+      <div class="empty-state">
+        <div style="font-size:35px;margin-bottom:12px">🌱</div>
+        <strong>Nothing here just yet.</strong>
+        <p style="margin-top:8px">
+          Be the first to share something!
+        </p>
+      </div>
+    `;
+    return;
+  }
+
+  feed.innerHTML = filtered.map(post => {
+    const username = post.profiles?.username || "User";
+    const liked = likedPosts.has(post.id);
+    const isOwner = post.user_id === currentUser.id;
+
+    return `
+      <article class="post-card" data-post="${escapeHTML(post.id)}">
+
+        <div class="post-header">
+          <div class="avatar">${escapeHTML(initials(username))}</div>
+
+          <div class="post-author">
+            <strong>${escapeHTML(username)}</strong>
+            <small>${escapeHTML(formatDate(post.created_at))}</small>
+          </div>
+
+          ${isOwner ? `
+            <button class="post-menu delete-post"
+              data-id="${escapeHTML(post.id)}"
+              title="Delete post">⋯</button>
+          ` : ""}
+        </div>
+
+        <div class="post-body">${escapeHTML(post.content)}</div>
+
+        <div class="post-stats">
+          <span class="like-count">💚 ${post.like_count || 0} likes</span>
+          <span class="comment-count">Comments</span>
+        </div>
+
+        <div class="post-actions">
+          <button
+            class="post-action like-btn ${liked ? "liked" : ""}"
+            data-id="${escapeHTML(post.id)}">
+            ${liked ? "💚 Liked" : "♡ Like"}
+          </button>
+
+          <button
+            class="post-action comment-toggle"
+            data-id="${escapeHTML(post.id)}">
+            💬 Comment
+          </button>
+        </div>
+
+        <div class="comments hidden" id="comments-${escapeHTML(post.id)}">
+          <div class="comment-list">
+            <div class="loading">Loading comments...</div>
+          </div>
+
+          <form class="comment-form" data-id="${escapeHTML(post.id)}">
+            <input name="comment"
+              maxlength="1000"
+              placeholder="Write a comment..."
+              required>
+            <button type="submit">Send</button>
+          </form>
+        </div>
+
+      </article>
+    `;
+  }).join("");
+}
+
+// 11. LIKE / UNLIKE POSTS
+
+async function toggleLike(postId, button) {
+  button.disabled = true;
+
+  const alreadyLiked = likedPosts.has(postId);
+
+  try {
+    if (alreadyLiked) {
+      const { error } = await db
+        .from("likes")
+        .delete()
+        .eq("post_id", postId)
+        .eq("user_id", currentUser.id);
+
+      if (error) throw error;
+
+    } else {
+      const { error } = await db
+        .from("likes")
+        .insert({
+          post_id: postId,
+          user_id: currentUser.id
         });
 
-        actions.append(likeButton);
+      if (error) throw error;
+    }
 
-        // Original post is protected from deletion.
+    // Refresh from the shared database.
+    await loadFeed();
 
-        if (!post.original) {
-            const deleteButton = makeElement(
-                "button",
-                "delete-btn",
-                "Delete post"
-            );
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    button.disabled = false;
+  }
+}
 
-            deleteButton.type = "button";
+// 12. DELETE POSTS
 
-            deleteButton.addEventListener("click", () => {
-                deletePost(post.id);
-            });
+async function deletePost(postId) {
+  if (!confirm("Are you sure you want to delete this post?")) {
+    return;
+  }
 
-            actions.append(deleteButton);
+  try {
+    const { error } = await db
+      .from("posts")
+      .delete()
+      .eq("id", postId)
+      .eq("user_id", currentUser.id);
+
+    if (error) throw error;
+
+    showToast("Post deleted.");
+    await loadFeed();
+
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+// 13. COMMENTS
+
+async function loadComments(postId) {
+  const container = $(`comments-${postId}`);
+
+  if (!container) return;
+
+  const list = container.querySelector(".comment-list");
+
+  const { data, error } = await db
+    .from("comments")
+    .select(`
+      *,
+      profiles!comments_user_id_fkey(username)
+    `)
+    .eq("post_id", postId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    list.textContent = "Couldn't load comments.";
+    return;
+  }
+
+  if (!data.length) {
+    list.innerHTML = `
+      <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
+        No comments yet. Start the conversation!
+      </p>
+    `;
+    return;
+  }
+
+  list.innerHTML = data.map(comment => {
+    const username = comment.profiles?.username || "User";
+
+    return `
+      <div class="comment">
+        <div class="avatar">${escapeHTML(initials(username))}</div>
+        <div class="comment-bubble">
+          <strong>${escapeHTML(username)}</strong>
+          ${escapeHTML(comment.content)}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function addComment(postId, content) {
+  const { error } = await db
+    .from("comments")
+    .insert({
+      post_id: postId,
+      user_id: currentUser.id,
+      content: content
+    });
+
+  if (error) {
+    showToast(error.message);
+    return;
+  }
+
+  showToast("Comment posted!");
+  await loadComments(postId);
+}
+
+// 14. FEED INTERACTIONS
+
+feed.addEventListener("click", async event => {
+  const likeButton = event.target.closest(".like-btn");
+  const deleteButton = event.target.closest(".delete-post");
+  const commentButton = event.target.closest(".comment-toggle");
+
+  if (likeButton) {
+    await toggleLike(likeButton.dataset.id, likeButton);
+  }
+
+  if (deleteButton) {
+    await deletePost(deleteButton.dataset.id);
+  }
+
+  if (commentButton) {
+    const postId = commentButton.dataset.id;
+    const container = $(`comments-${postId}`);
+
+    container.classList.toggle("hidden");
+
+    if (!container.classList.contains("hidden")) {
+      await loadComments(postId);
+    }
+  }
+});
+
+feed.addEventListener("submit", async event => {
+  const form = event.target.closest(".comment-form");
+
+  if (!form) return;
+
+  event.preventDefault();
+
+  const postId = form.dataset.id;
+  const input = form.elements.comment;
+  const content = input.value.trim();
+
+  if (!content) return;
+
+  input.disabled = true;
+
+  try {
+    await addComment(postId, content);
+    input.value = "";
+  } finally {
+    input.disabled = false;
+  }
+});
+
+// 15. NAVIGATION
+
+function setFilter(filter, title) {
+  currentFilter = filter;
+  $("feedTitle").textContent = title;
+
+  document.querySelectorAll(".nav-item").forEach(item => {
+    item.classList.remove("active");
+  });
+
+  renderFeed();
+}
+
+$("feedNav").addEventListener("click", () => {
+  setFilter("all", "Your feed");
+});
+
+$("myPostsNav").addEventListener("click", () => {
+  setFilter("mine", "Your posts");
+});
+
+$("likedNav").addEventListener("click", () => {
+  setFilter("liked", "Liked posts");
+});
+
+$("homeBtn").addEventListener("click", () => {
+  setFilter("all", "Your feed");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
+
+$("aboutNav").addEventListener("click", () => {
+  alert(
+    "Thoughtly is a community where everyone has a voice. Share your thoughts, meet people and grow together. 💚"
+  );
+});
+
+$("profileBtn").addEventListener("click", () => {
+  setFilter("mine", "Your posts");
+});
+
+// 16. SEARCH
+
+$("searchInput").addEventListener("input", event => {
+  currentSearch = event.target.value.trim().toLowerCase();
+  renderFeed();
+});
+
+// 17. DARK MODE
+
+$("themeBtn").addEventListener("click", () => {
+  document.body.classList.toggle("dark");
+
+  localStorage.setItem(
+    "thoughtly-theme",
+    document.body.classList.contains("dark") ? "dark" : "light"
+  );
+});
+
+if (localStorage.getItem("thoughtly-theme") === "dark") {
+  document.body.classList.add("dark");
+}
+
+// 18. LIVE UPDATES
+
+let realtimeChannel = null;
+
+function startRealtime() {
+  if (realtimeChannel) {
+    db.removeChannel(realtimeChannel);
+  }
+
+  realtimeChannel = db
+    .channel("thoughtly-community")
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "posts" },
+      () => loadFeed()
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "likes" },
+      () => loadFeed()
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "comments" },
+      event => {
+        const postId = event.new?.post_id || event.old?.post_id;
+
+        if (postId) {
+          const container = $(`comments-${postId}`);
+
+          if (container && !container.classList.contains("hidden")) {
+            loadComments(postId);
+          }
         }
-
-        card.append(stats, actions);
-        feed.append(card);
-    });
+      }
+    )
+    .subscribe();
 }
 
-// LIKE / UNLIKE
+// 19. START
 
-function toggleLike(id) {
-    const post = posts.find(p => p.id === id);
+async function startThoughtly() {
+  await initializeApp();
 
-    if (!post) return;
+  if (currentUser) {
+    startRealtime();
+  }
 
-    if (post.liked) {
-        post.likes = Math.max(0, post.likes - 1);
-        post.liked = false;
-    } else {
-        post.likes++;
-        post.liked = true;
+  db.auth.onAuthStateChange((event, session) => {
+    if (event === "SIGNED_IN" && session) {
+      setTimeout(startRealtime, 0);
     }
 
-    if (savePosts()) {
-        renderPosts();
+    if (event === "SIGNED_OUT") {
+      if (realtimeChannel) {
+        db.removeChannel(realtimeChannel);
+        realtimeChannel = null;
+      }
     }
+  });
 }
 
-// DELETE POSTS
-
-function deletePost(id) {
-    const post = posts.find(p => p.id === id);
-
-    if (!post || post.original) return;
-
-    if (!confirm("Are you sure you want to delete this post?")) {
-        return;
-    }
-
-    posts = posts.filter(p => p.id !== id);
-
-    if (savePosts()) {
-        renderPosts();
-    }
-}
-
-// IMAGE PREVIEW
-
-imageInput.addEventListener("change", () => {
-    preview.replaceChildren();
-    selectedImage = "";
-
-    const file = imageInput.files[0];
-
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-        alert("Please select an image.");
-        imageInput.value = "";
-        return;
-    }
-
-    if (file.size > 1024 * 1024) {
-        alert("Please choose an image smaller than 1 MB.");
-        imageInput.value = "";
-        return;
-    }
-
-    const reader = new FileReader();
-
-    reader.onload = () => {
-        selectedImage = reader.result;
-
-        const img = document.createElement("img");
-        img.src = selectedImage;
-        img.alt = "Image preview";
-
-        preview.append(img);
-    };
-
-    reader.readAsDataURL(file);
-});
-
-// CREATE A NEW POST
-
-form.addEventListener("submit", event => {
-    event.preventDefault();
-
-    const title = document.getElementById("postTitle").value.trim();
-    const text = document.getElementById("postText").value.trim();
-
-    if (!title || !text) {
-        alert("Please add a title and some text.");
-        return;
-    }
-
-    const newPost = {
-        id: crypto.randomUUID(),
-        author: "Mohtad Abdullah Qutab",
-        title: title,
-        text: text,
-        image: selectedImage,
-        date: new Date().toLocaleString(),
-        likes: 0,
-        liked: false,
-        original: false
-    };
-
-    posts.push(newPost);
-
-    if (!savePosts()) {
-        posts.pop();
-        return;
-    }
-
-    form.reset();
-    preview.replaceChildren();
-    selectedImage = "";
-
-    renderPosts();
-
-    window.scrollTo({
-        top: document.body.scrollHeight,
-        behavior: "smooth"
-    });
-});
-
-// START WEBSITE
-
-renderPosts();
+startThoughtly();
