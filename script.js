@@ -6,13 +6,16 @@
 // 1. SUPABASE CONFIGURATION
 // Replace these two values with your own Supabase credentials.
 
-const SUPABASE_URL = "YOUR_SUPABASE_PROJECT_URL";
-const SUPABASE_KEY = "YOUR_SUPABASE_ANON_KEY";
+
+const SUPABASE_URL = "https://sayfzjtlrjthmmqauelx.supabase.co";
+
+const SUPABASE_KEY = "sb_publishable_SjVSkZCEJQe4JUFO4bU_uQ_sXG0ykZs";
 
 const db = window.supabase.createClient(
   SUPABASE_URL,
   SUPABASE_KEY
 );
+
 
 // 2. APP STATE
 
