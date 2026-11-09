@@ -4,52 +4,77 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quotes Social</title>
+    <meta name="theme-color" content="#1877f2">
+    <title>Thoughtly</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <header>
-        <h1>Quotes Social</h1>
-        <p>Share inspiration. Spread positivity.</p>
-    </header>
+<header class="topbar">
+    <div class="brand">Thoughtly</div>
+    <div class="tagline">Share thoughts. Inspire people.</div>
+</header>
 
-    <main>
-        <div class="post">
-            <div class="profile">
-                <div class="avatar">M</div>
-                <div>
-                    <h3>Mohtad Abdullah Qutab</h3>
-                    <span>Shared with everyone 🌍</span>
-                </div>
-            </div>
+<main class="container">
 
-            <img src="quote.jpg" alt="Tokugawa-Leyasu's Quote Image"
-                 class="quote-image">
+    <section class="welcome">
+        <h1>Your daily dose of inspiration.</h1>
+        <p>Share quotes, thoughts, and ideas with the world.</p>
+    </section>
 
-            <div class="post-content">
-                <h2>A little inspiration goes a long way.</h2>
-                <p>What do you think about this quote?</p>
-
-                <div class="actions">
-                    <button id="likeButton" onclick="likePost()">
-                        ❤️ Like
-                    </button>
-
-                    <span id="likeCount">0 likes</span>
-                </div>
-
-                <p class="thanks" id="thanks"></p>
-            </div>
+    <section class="composer">
+        <div class="composer-heading">
+            <div class="avatar">M</div>
+            <h2>Create a post</h2>
         </div>
-    </main>
 
-    <footer>
-        The quest said I had to post this on social media, but I didn't have time, so I made my OWN social media website.... lol
-    </footer>
+        <form id="postForm">
+            <input
+                type="text"
+                id="postTitle"
+                placeholder="Give your post a title..."
+                maxlength="120"
+                required
+            >
 
-    <script type="module" src="script.js"></script>
+            <textarea
+                id="postText"
+                placeholder="What's on your mind?"
+                maxlength="2000"
+                required
+            ></textarea>
 
+            <label class="upload-label" for="postImage">
+                📷 Add an image (optional)
+            </label>
+
+            <input
+                type="file"
+                id="postImage"
+                accept="image/*"
+            >
+
+            <div id="imagePreview"></div>
+
+            <button type="submit" class="publish-btn">
+                Publish post
+            </button>
+        </form>
+    </section>
+
+    <div class="feed-heading">
+        <h2>Community feed</h2>
+        <span id="postCount">0 posts</span>
+    </div>
+
+    <section id="feed" aria-live="polite"></section>
+
+</main>
+
+<footer>
+ Mohtad Abdullah Qutab 2026
+</footer>
+
+<script src="script.js"></script>
 </body>
 </html>
-
