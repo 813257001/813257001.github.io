@@ -5,138 +5,320 @@
     box-sizing: border-box;
 }
 
+:root {
+    --primary: #1877f2;
+    --primary-dark: #1264ce;
+    --background: #f0f2f5;
+    --white: #ffffff;
+    --text: #1c1e21;
+    --muted: #65676b;
+    --border: #e4e6eb;
+}
+
 body {
     font-family: Arial, sans-serif;
-    background: #f1f3f8;
-    color: #222;
+    background: var(--background);
+    color: var(--text);
 }
 
-header {
-    background: linear-gradient(135deg, #635bff, #a855f7);
-    color: white;
-    text-align: center;
-    padding: 30px 15px;
-}
+/* HEADER */
 
-header h1 {
-    font-size: 30px;
-    margin-bottom: 8px;
-}
-
-header p {
-    opacity: 0.9;
-}
-
-main {
-    max-width: 550px;
-    margin: 40px auto;
-    padding: 0 15px;
-}
-
-.post {
-    background: white;
-    border-radius: 16px;
-    overflow: hidden;
-    box-shadow: 0 5px 25px rgba(0,0,0,0.08);
-}
-
-.profile {
+.topbar {
+    background: var(--white);
+    padding: 16px 7%;
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 18px;
+    justify-content: space-between;
+    box-shadow: 0 2px 8px rgba(0,0,0,.08);
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
-.avatar {
-    background: #635bff;
-    color: white;
-    width: 45px;
-    height: 45px;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
+.brand {
+    color: var(--primary);
+    font-size: 29px;
     font-weight: bold;
-    font-size: 20px;
+    letter-spacing: -1px;
 }
 
-.profile h3 {
-    font-size: 16px;
-}
-
-.profile span {
-    font-size: 12px;
-    color: #888;
-}
-
-.quote-image {
-    width: 100%;
-    display: block;
-    object-fit: contain;
-    max-height: 550px;
-    background: #eee;
-}
-
-.post-content {
-    padding: 20px;
-}
-
-.post-content h2 {
-    font-size: 19px;
-    margin-bottom: 10px;
-}
-
-.post-content p {
-    color: #777;
+.tagline {
+    color: var(--muted);
     font-size: 14px;
 }
 
-.actions {
+/* MAIN */
+
+.container {
+    max-width: 680px;
+    margin: 30px auto;
+    padding: 0 16px;
+}
+
+.welcome {
+    margin-bottom: 25px;
+}
+
+.welcome h1 {
+    font-size: 25px;
+    margin-bottom: 8px;
+}
+
+.welcome p {
+    color: var(--muted);
+    font-size: 14px;
+}
+
+/* COMPOSER */
+
+.composer {
+    background: var(--white);
+    padding: 22px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.06);
+    margin-bottom: 30px;
+}
+
+.composer-heading {
     display: flex;
     align-items: center;
-    gap: 15px;
-    margin-top: 20px;
+    gap: 12px;
+    margin-bottom: 18px;
 }
 
-#likeButton {
-    background: #635bff;
+.composer-heading h2 {
+    font-size: 18px;
+}
+
+.avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: var(--primary);
     color: white;
-    border: none;
-    padding: 12px 22px;
-    border-radius: 25px;
-    font-size: 16px;
-    cursor: pointer;
-    transition: 0.2s;
-}
-
-#likeButton:hover {
-    background: #493fe0;
-    transform: scale(1.05);
-}
-
-#likeCount {
+    display: grid;
+    place-items: center;
     font-weight: bold;
-    color: #444;
+    flex-shrink: 0;
 }
 
-.thanks {
-    margin-top: 15px;
-    color: #635bff !important;
+#postForm input[type="text"],
+#postForm textarea {
+    width: 100%;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    margin-bottom: 12px;
+    font: inherit;
+    outline: none;
 }
 
-footer {
-    text-align: center;
-    color: #888;
-    padding: 25px;
+#postForm input:focus,
+#postForm textarea:focus {
+    border-color: var(--primary);
+}
+
+#postForm textarea {
+    min-height: 105px;
+    resize: vertical;
+}
+
+.upload-label {
+    display: inline-block;
+    color: var(--primary);
+    cursor: pointer;
+    font-size: 14px;
+    margin: 5px 0 12px;
+}
+
+#postImage {
+    display: block;
+    max-width: 100%;
     font-size: 13px;
 }
 
-@media (max-width: 600px) {
-    main {
-        margin: 20px auto;
-    }
-
-    header h1 {
-        font-size: 25px;
-    }
+#imagePreview img {
+    max-width: 100%;
+    max-height: 200px;
+    border-radius: 10px;
+    margin: 12px 0;
+    object-fit: contain;
 }
 
+.publish-btn {
+    width: 100%;
+    border: none;
+    border-radius: 8px;
+    background: var(--primary);
+    color: white;
+    padding: 13px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 12px;
+}
+
+.publish-btn:hover {
+    background: var(--primary-dark);
+}
+
+/* FEED */
+
+.feed-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.feed-heading h2 {
+    font-size: 20px;
+}
+
+.feed-heading span {
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.post {
+    background: var(--white);
+    border-radius: 12px;
+    margin-bottom: 20px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,.06);
+}
+
+.post-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 17px;
+}
+
+.post-author {
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.post-date {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 4px;
+}
+
+.post-body {
+    padding: 0 18px 18px;
+}
+
+.post-body h3 {
+    font-size: 20px;
+    margin-bottom: 10px;
+}
+
+.post-body p {
+    color: #444;
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+
+.post-image {
+    width: 100%;
+    max-height: 550px;
+    object-fit: contain;
+    background: #f5f5f5;
+    display: block;
+}
+
+.post-stats {
+    padding: 13px 18px;
+    display: flex;
+    justify-content: space-between;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.post-actions {
+    border-top: 1px solid var(--border);
+    padding: 10px 15px;
+    display: flex;
+    gap: 10px;
+}
+
+.action-btn {
+    flex: 1;
+    border: none;
+    background: transparent;
+    padding: 11px;
+    border-radius: 7px;
+    cursor: pointer;
+    color: var(--muted);
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.action-btn:hover {
+    background: var(--background);
+}
+
+.action-btn.liked {
+    color: var(--primary);
+}
+
+.delete-btn {
+    border: none;
+    background: transparent;
+    color: #d93025;
+    cursor: pointer;
+    margin-left: auto;
+    font-size: 12px;
+}
+
+.empty-feed {
+    text-align: center;
+    padding: 35px;
+    color: var(--muted);
+    background: white;
+    border-radius: 12px;
+}
+
+/* FOOTER */
+
+footer {
+    text-align: center;
+    color: var(--muted);
+    padding: 30px 15px;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+/* MOBILE */
+
+@media (max-width: 600px) {
+    .topbar {
+        padding: 14px 18px;
+    }
+
+    .brand {
+        font-size: 25px;
+    }
+
+    .tagline {
+        font-size: 11px;
+    }
+
+    .container {
+        margin: 22px auto;
+    }
+
+    .welcome h1 {
+        font-size: 21px;
+    }
+
+    .composer {
+        padding: 17px;
+    }
+
+    .post-body h3 {
+        font-size: 18px;
+    }
+}
