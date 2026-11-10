@@ -96,6 +96,7 @@ function setAuthMode(mode) {
 $("loginTab").addEventListener("click", () => setAuthMode("login"));
 $("signupTab").addEventListener("click", () => setAuthMode("signup"));
 
+
 authForm.addEventListener("submit", async event => {
   event.preventDefault();
 
@@ -104,7 +105,6 @@ authForm.addEventListener("submit", async event => {
   const username = $("usernameInput").value.trim().toLowerCase();
 
   const button = $("authSubmit");
-
   button.disabled = true;
   button.textContent = "Please wait...";
   authMessage.textContent = "";
@@ -113,7 +113,7 @@ authForm.addEventListener("submit", async event => {
     if (currentMode === "signup") {
       if (!/^[a-z0-9_]{3,24}$/.test(username)) {
         throw new Error(
-          "Username must be 3-24 characters (letters, numbers and underscores)."
+          "Username must be 3-24 characters using letters, numbers and underscores."
         );
       }
 
@@ -121,38 +121,47 @@ authForm.addEventListener("submit", async event => {
         email,
         password,
         options: {
-          data: {
-            username: username
-          }
+          data: { username }
         }
       });
 
       if (error) throw error;
 
       if (!data.session) {
-        authMessage.style.color = "var(--green)";
-        authMessage.textContent =
-          "Account created! Check your email to confirm your account.";
-      } else {
-        showToast("Welcome to Thoughtly!");
+        throw new Error(
+          "Turn OFF Confirm Email in Supabase Authentication settings to enable instant signup."
+        );
       }
+
+      await loadUser(data.user);
+
+      if (currentProfile) {
+        showToast("Welcome to Thoughtly! 🌱");
+      }
+
     } else {
-      const { error } = await db.auth.signInWithPassword({
+      const { data, error } = await db.auth.signInWithPassword({
         email,
         password
       });
 
       if (error) throw error;
+
+      await loadUser(data.user);
+      showToast("Welcome back!");
     }
+
   } catch (error) {
     authMessage.style.color = "#d34c4c";
     authMessage.textContent = error.message;
+
   } finally {
     button.disabled = false;
     button.textContent =
       currentMode === "login" ? "Log in" : "Create account";
   }
 });
+
 
 // 6. SESSION MANAGEMENT
 
