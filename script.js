@@ -1,739 +1,276 @@
 
-// ==========================================
-// THOUGHTLY - SOCIAL NETWORK
-// ==========================================
+import { createClient } from
+  "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
-// 1. SUPABASE CONFIGURATION
-// Replace these two values with your own Supabase credentials.
+// THOUGHTLY SUPABASE CONNECTION
+const SUPABASE_URL = "https://ihoxyqbwhnewsqvqztrs.supabase.co";
+const SUPABASE_KEY = "sb_publishable_z32vgR2Xv_ZS8Pbkqjm5Pw_z53hK4Qw";
 
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const SUPABASE_URL = "https://sayfzjtlrjthmmqauelx.supabase.co";
+const $ = (id) => document.getElementById(id);
 
-const SUPABASE_KEY = "sb_publishable_SjVSkZCEJQe4JUFO4bU_uQ_sXG0ykZs";
-
-const db = window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_KEY
-);
-
-
-// 2. APP STATE
-
+let mode = "login";
 let currentUser = null;
-let currentProfile = null;
-let currentMode = "login";
-let currentFilter = "all";
-let currentSearch = "";
-let posts = [];
-let likedPosts = new Set();
-let toastTimer = null;
 
-// 3. ELEMENTS
-
-const $ = id => document.getElementById(id);
-
-const authScreen = $("authScreen");
-const app = $("app");
-const authForm = $("authForm");
-const authMessage = $("authMessage");
-const feed = $("feed");
-
-// 4. UTILITIES
-
-function escapeHTML(value) {
-  return String(value ?? "").replace(/[&<>"']/g, char => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  })[char]);
-}
-
-function initials(name) {
-  return (name || "?").trim().charAt(0).toUpperCase();
-}
-
-function showToast(message) {
-  const toast = $("toast");
-  toast.textContent = message;
-  toast.classList.add("show");
-
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    toast.classList.remove("show");
-  }, 2600);
-}
-
-function formatDate(date) {
-  const value = new Date(date);
-  return value.toLocaleString([], {
-    dateStyle: "medium",
-    timeStyle: "short"
-  });
-}
-
-function setLoading(message) {
-  feed.innerHTML = `<div class="loading">${escapeHTML(message)}</div>`;
-}
-
-// 5. AUTHENTICATION UI
-
-function setAuthMode(mode) {
-  currentMode = mode;
+// Switch between login and registration.
+function setMode(newMode) {
+  mode = newMode;
 
   $("loginTab").classList.toggle("active", mode === "login");
   $("signupTab").classList.toggle("active", mode === "signup");
-
   $("usernameField").classList.toggle("hidden", mode !== "signup");
 
-  $("authSubmit").textContent =
-    mode === "login" ? "Log in" : "Create account";
+  $("username").required = mode === "signup";
+  $("password").autocomplete =
+    mode === "signup" ? "new-password" : "current-password";
 
-  authMessage.textContent = "";
+  $("authSubmit").textContent =
+    mode === "signup" ? "Create account" : "Log in";
+
+  $("authMessage").textContent = "";
 }
 
-$("loginTab").addEventListener("click", () => setAuthMode("login"));
-$("signupTab").addEventListener("click", () => setAuthMode("signup"));
+$("loginTab").addEventListener("click", () => setMode("login"));
+$("signupTab").addEventListener("click", () => setMode("signup"));
 
-
-authForm.addEventListener("submit", async event => {
+// Register and log in.
+$("authForm").addEventListener("submit", async (event) => {
   event.preventDefault();
 
-  const email = $("emailInput").value.trim();
-  const password = $("passwordInput").value;
-  const username = $("usernameInput").value.trim().toLowerCase();
+  const email = $("email").value.trim();
+  const password = $("password").value;
+  const username = $("username").value.trim().toLowerCase();
 
-  const button = $("authSubmit");
-  button.disabled = true;
-  button.textContent = "Please wait...";
-  authMessage.textContent = "";
+  $("authSubmit").disabled = true;
+  $("authMessage").textContent = "Please wait...";
 
   try {
-    if (currentMode === "signup") {
+    if (mode === "signup") {
       if (!/^[a-z0-9_]{3,24}$/.test(username)) {
         throw new Error(
-          "Username must be 3-24 characters using letters, numbers and underscores."
+          "Username must be 3–24 characters using letters, numbers or underscores."
         );
       }
 
-      const { data, error } = await db.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: { username }
+          data: { username },
+          emailRedirectTo: window.location.origin
         }
       });
 
       if (error) throw error;
 
-      if (!data.session) {
-        throw new Error(
-          "Turn OFF Confirm Email in Supabase Authentication settings to enable instant signup."
-        );
+      if (data.session) {
+        $("authMessage").textContent = "Account created!";
+        await showApp(data.session.user);
+      } else {
+        $("authMessage").textContent =
+          "Account created! Check your email for a confirmation link before logging in.";
       }
-
-      await loadUser(data.user);
-
-      if (currentProfile) {
-        showToast("Welcome to Thoughtly! 🌱");
-      }
-
     } else {
-      const { data, error } = await db.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
 
       if (error) throw error;
 
-      await loadUser(data.user);
-      showToast("Welcome back!");
+      await showApp(data.user);
     }
-
   } catch (error) {
-    authMessage.style.color = "#d34c4c";
-    authMessage.textContent = error.message;
-
+    $("authMessage").textContent = error.message;
   } finally {
-    button.disabled = false;
-    button.textContent =
-      currentMode === "login" ? "Log in" : "Create account";
+    $("authSubmit").disabled = false;
   }
 });
 
-
-// 6. SESSION MANAGEMENT
-
-async function initializeApp() {
-  const { data, error } = await db.auth.getSession();
-
-  if (error) {
-    showToast(error.message);
-    return;
-  }
-
-  if (data.session) {
-    await loadUser(data.session.user);
-  } else {
-    showAuth();
-  }
-
-  db.auth.onAuthStateChange((event, session) => {
-    if (event === "SIGNED_OUT") {
-      currentUser = null;
-      currentProfile = null;
-      showAuth();
-    }
-
-    if (event === "SIGNED_IN" && session) {
-      loadUser(session.user);
-    }
-  });
-}
-
-function showAuth() {
-  authScreen.classList.remove("hidden");
-  app.classList.add("hidden");
-}
-
-async function loadUser(user) {
+// Display the logged-in application.
+async function showApp(user) {
   currentUser = user;
 
-  const { data: profile, error } = await db
+  $("authSection").classList.add("hidden");
+  $("appSection").classList.remove("hidden");
+  $("logoutBtn").classList.remove("hidden");
+
+  await loadProfile();
+  await loadPosts();
+}
+
+// Load profile information.
+async function loadProfile() {
+  const { data, error } = await supabase
     .from("profiles")
-    .select("*")
-    .eq("id", user.id)
+    .select("username")
+    .eq("id", currentUser.id)
     .single();
 
   if (error) {
-    showToast("Couldn't load your profile: " + error.message);
+    $("currentUsername").textContent = "My account";
     return;
   }
 
-  currentProfile = profile;
-
-  authScreen.classList.add("hidden");
-  app.classList.remove("hidden");
-
-  updateProfileUI();
-  await loadFeed();
+  $("currentUsername").textContent = "@" + data.username;
 }
 
-function updateProfileUI() {
-  const name = currentProfile.username || "User";
-  const avatar = initials(name);
-
-  $("sideName").textContent = name;
-  $("sideUsername").textContent = "@" + name;
-  $("sideAvatar").textContent = avatar;
-  $("composerAvatar").textContent = avatar;
-  $("profileBtn").textContent = avatar;
-}
-
-// 7. LOG OUT
-
-$("logoutBtn").addEventListener("click", async () => {
-  const { error } = await db.auth.signOut();
-
-  if (error) showToast(error.message);
-  else showToast("Logged out successfully.");
-});
-
-// 8. CREATE POSTS
-
-$("postInput").addEventListener("input", event => {
-  $("charCount").textContent =
-    `${event.target.value.length} / 3000`;
-});
-
-$("publishBtn").addEventListener("click", createPost);
-
-async function createPost() {
-  const content = $("postInput").value.trim();
-
-  if (!content) {
-    showToast("Write something first!");
-    return;
-  }
-
-  if (content.length > 3000) {
-    showToast("Your post is too long.");
-    return;
-  }
-
-  const button = $("publishBtn");
-  button.disabled = true;
-  button.textContent = "Publishing...";
-
-  try {
-    const { error } = await db
-      .from("posts")
-      .insert({
-        user_id: currentUser.id,
-        content: content
-      });
-
-    if (error) throw error;
-
-    $("postInput").value = "";
-    $("charCount").textContent = "0 / 3000";
-
-    showToast("Your post is live! 🌱");
-    await loadFeed();
-
-  } catch (error) {
-    showToast(error.message);
-  } finally {
-    button.disabled = false;
-    button.textContent = "＋ Publish post";
-  }
-}
-
-// 9. LOAD FEED
-
-async function loadFeed() {
-  setLoading("Loading community posts...");
-
-  try {
-    const { data: postData, error } = await db
-      .from("posts")
-      .select(`
-        *,
-        profiles!posts_user_id_fkey(username)
-      `)
-      .order("created_at", { ascending: false });
-
-    if (error) throw error;
-
-    posts = postData || [];
-
-    const { data: likeData, error: likeError } = await db
-      .from("likes")
-      .select("post_id")
-      .eq("user_id", currentUser.id);
-
-    if (likeError) throw likeError;
-
-    likedPosts = new Set(
-      (likeData || []).map(item => item.post_id)
-    );
-
-    renderFeed();
-
-  } catch (error) {
-    feed.innerHTML = `
-      <div class="empty-state">
-        Couldn't load the feed.<br><br>
-        ${escapeHTML(error.message)}
-      </div>
-    `;
-  }
-}
-
-// 10. RENDER POSTS
-
-function renderFeed() {
-  let filtered = [...posts];
-
-  if (currentFilter === "mine") {
-    filtered = filtered.filter(
-      post => post.user_id === currentUser.id
-    );
-  }
-
-  if (currentFilter === "liked") {
-    filtered = filtered.filter(
-      post => likedPosts.has(post.id)
-    );
-  }
-
-  if (currentSearch) {
-    filtered = filtered.filter(post => {
-      const username = post.profiles?.username || "";
-
-      return (
-        post.content.toLowerCase().includes(currentSearch) ||
-        username.toLowerCase().includes(currentSearch)
-      );
-    });
-  }
-
-  if (!filtered.length) {
-    feed.innerHTML = `
-      <div class="empty-state">
-        <div style="font-size:35px;margin-bottom:12px">🌱</div>
-        <strong>Nothing here just yet.</strong>
-        <p style="margin-top:8px">
-          Be the first to share something!
-        </p>
-      </div>
-    `;
-    return;
-  }
-
-  feed.innerHTML = filtered.map(post => {
-    const username = post.profiles?.username || "User";
-    const liked = likedPosts.has(post.id);
-    const isOwner = post.user_id === currentUser.id;
-
-    return `
-      <article class="post-card" data-post="${escapeHTML(post.id)}">
-
-        <div class="post-header">
-          <div class="avatar">${escapeHTML(initials(username))}</div>
-
-          <div class="post-author">
-            <strong>${escapeHTML(username)}</strong>
-            <small>${escapeHTML(formatDate(post.created_at))}</small>
-          </div>
-
-          ${isOwner ? `
-            <button class="post-menu delete-post"
-              data-id="${escapeHTML(post.id)}"
-              title="Delete post">⋯</button>
-          ` : ""}
-        </div>
-
-        <div class="post-body">${escapeHTML(post.content)}</div>
-
-        <div class="post-stats">
-          <span class="like-count">💚 ${post.like_count || 0} likes</span>
-          <span class="comment-count">Comments</span>
-        </div>
-
-        <div class="post-actions">
-          <button
-            class="post-action like-btn ${liked ? "liked" : ""}"
-            data-id="${escapeHTML(post.id)}">
-            ${liked ? "💚 Liked" : "♡ Like"}
-          </button>
-
-          <button
-            class="post-action comment-toggle"
-            data-id="${escapeHTML(post.id)}">
-            💬 Comment
-          </button>
-        </div>
-
-        <div class="comments hidden" id="comments-${escapeHTML(post.id)}">
-          <div class="comment-list">
-            <div class="loading">Loading comments...</div>
-          </div>
-
-          <form class="comment-form" data-id="${escapeHTML(post.id)}">
-            <input name="comment"
-              maxlength="1000"
-              placeholder="Write a comment..."
-              required>
-            <button type="submit">Send</button>
-          </form>
-        </div>
-
-      </article>
-    `;
-  }).join("");
-}
-
-// 11. LIKE / UNLIKE POSTS
-
-async function toggleLike(postId, button) {
-  button.disabled = true;
-
-  const alreadyLiked = likedPosts.has(postId);
-
-  try {
-    if (alreadyLiked) {
-      const { error } = await db
-        .from("likes")
-        .delete()
-        .eq("post_id", postId)
-        .eq("user_id", currentUser.id);
-
-      if (error) throw error;
-
-    } else {
-      const { error } = await db
-        .from("likes")
-        .insert({
-          post_id: postId,
-          user_id: currentUser.id
-        });
-
-      if (error) throw error;
-    }
-
-    // Refresh from the shared database.
-    await loadFeed();
-
-  } catch (error) {
-    showToast(error.message);
-  } finally {
-    button.disabled = false;
-  }
-}
-
-// 12. DELETE POSTS
-
-async function deletePost(postId) {
-  if (!confirm("Are you sure you want to delete this post?")) {
-    return;
-  }
-
-  try {
-    const { error } = await db
-      .from("posts")
-      .delete()
-      .eq("id", postId)
-      .eq("user_id", currentUser.id);
-
-    if (error) throw error;
-
-    showToast("Post deleted.");
-    await loadFeed();
-
-  } catch (error) {
-    showToast(error.message);
-  }
-}
-
-// 13. COMMENTS
-
-async function loadComments(postId) {
-  const container = $(`comments-${postId}`);
-
-  if (!container) return;
-
-  const list = container.querySelector(".comment-list");
-
-  const { data, error } = await db
-    .from("comments")
-    .select(`
-      *,
-      profiles!comments_user_id_fkey(username)
-    `)
-    .eq("post_id", postId)
-    .order("created_at", { ascending: true });
-
-  if (error) {
-    list.textContent = "Couldn't load comments.";
-    return;
-  }
-
-  if (!data.length) {
-    list.innerHTML = `
-      <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
-        No comments yet. Start the conversation!
-      </p>
-    `;
-    return;
-  }
-
-  list.innerHTML = data.map(comment => {
-    const username = comment.profiles?.username || "User";
-
-    return `
-      <div class="comment">
-        <div class="avatar">${escapeHTML(initials(username))}</div>
-        <div class="comment-bubble">
-          <strong>${escapeHTML(username)}</strong>
-          ${escapeHTML(comment.content)}
-        </div>
-      </div>
-    `;
-  }).join("");
-}
-
-async function addComment(postId, content) {
-  const { error } = await db
-    .from("comments")
-    .insert({
-      post_id: postId,
-      user_id: currentUser.id,
-      content: content
-    });
-
-  if (error) {
-    showToast(error.message);
-    return;
-  }
-
-  showToast("Comment posted!");
-  await loadComments(postId);
-}
-
-// 14. FEED INTERACTIONS
-
-feed.addEventListener("click", async event => {
-  const likeButton = event.target.closest(".like-btn");
-  const deleteButton = event.target.closest(".delete-post");
-  const commentButton = event.target.closest(".comment-toggle");
-
-  if (likeButton) {
-    await toggleLike(likeButton.dataset.id, likeButton);
-  }
-
-  if (deleteButton) {
-    await deletePost(deleteButton.dataset.id);
-  }
-
-  if (commentButton) {
-    const postId = commentButton.dataset.id;
-    const container = $(`comments-${postId}`);
-
-    container.classList.toggle("hidden");
-
-    if (!container.classList.contains("hidden")) {
-      await loadComments(postId);
-    }
-  }
-});
-
-feed.addEventListener("submit", async event => {
-  const form = event.target.closest(".comment-form");
-
-  if (!form) return;
-
+// Publish a thought.
+$("postForm").addEventListener("submit", async (event) => {
   event.preventDefault();
 
-  const postId = form.dataset.id;
-  const input = form.elements.comment;
-  const content = input.value.trim();
+  const content = $("postContent").value.trim();
+  if (!content || !currentUser) return;
 
-  if (!content) return;
-
-  input.disabled = true;
+  const button = $("postForm").querySelector("button");
+  button.disabled = true;
+  $("postMessage").textContent = "Publishing...";
 
   try {
-    await addComment(postId, content);
-    input.value = "";
+    const { error } = await supabase.from("posts").insert({
+      user_id: currentUser.id,
+      content
+    });
+
+    if (error) throw error;
+
+    $("postContent").value = "";
+    $("postMessage").textContent = "Your thought has been published!";
+    await loadPosts();
+  } catch (error) {
+    $("postMessage").textContent = error.message;
   } finally {
-    input.disabled = false;
+    button.disabled = false;
   }
 });
 
-// 15. NAVIGATION
+// Load the shared community feed.
+async function loadPosts() {
+  $("posts").textContent = "Loading thoughts...";
 
-function setFilter(filter, title) {
-  currentFilter = filter;
-  $("feedTitle").textContent = title;
+  try {
+    const { data: posts, error } = await supabase
+      .from("posts")
+      .select("id, user_id, content, created_at")
+      .order("created_at", { ascending: false })
+      .limit(50);
 
-  document.querySelectorAll(".nav-item").forEach(item => {
-    item.classList.remove("active");
-  });
+    if (error) throw error;
 
-  renderFeed();
-}
+    if (!posts || posts.length === 0) {
+      $("posts").textContent = "No thoughts yet. Be the first to share!";
+      return;
+    }
 
-$("feedNav").addEventListener("click", () => {
-  setFilter("all", "Your feed");
-});
+    const userIds = [...new Set(posts.map(post => post.user_id))];
 
-$("myPostsNav").addEventListener("click", () => {
-  setFilter("mine", "Your posts");
-});
+    const { data: profiles, error: profileError } = await supabase
+      .from("profiles")
+      .select("id, username")
+      .in("id", userIds);
 
-$("likedNav").addEventListener("click", () => {
-  setFilter("liked", "Liked posts");
-});
+    if (profileError) throw profileError;
 
-$("homeBtn").addEventListener("click", () => {
-  setFilter("all", "Your feed");
-  window.scrollTo({ top: 0, behavior: "smooth" });
-});
+    const usernames = new Map(
+      profiles.map(profile => [profile.id, profile.username])
+    );
 
-$("aboutNav").addEventListener("click", () => {
-  alert(
-    "Thoughtly is a community where everyone has a voice. Share your thoughts, meet people and grow together. 💚"
-  );
-});
+    const container = $("posts");
+    container.replaceChildren();
 
-$("profileBtn").addEventListener("click", () => {
-  setFilter("mine", "Your posts");
-});
+    posts.forEach(post => {
+      const article = document.createElement("article");
+      article.className = "post";
 
-// 16. SEARCH
+      const header = document.createElement("div");
+      header.className = "post-header";
 
-$("searchInput").addEventListener("input", event => {
-  currentSearch = event.target.value.trim().toLowerCase();
-  renderFeed();
-});
+      const username = document.createElement("span");
+      username.className = "post-user";
+      username.textContent =
+        "@" + (usernames.get(post.user_id) || "thoughtly_user");
 
-// 17. DARK MODE
+      const date = document.createElement("span");
+      date.className = "post-date";
+      date.textContent = new Date(post.created_at).toLocaleString();
 
-$("themeBtn").addEventListener("click", () => {
-  document.body.classList.toggle("dark");
+      header.append(username, date);
 
-  localStorage.setItem(
-    "thoughtly-theme",
-    document.body.classList.contains("dark") ? "dark" : "light"
-  );
-});
+      const content = document.createElement("p");
+      content.className = "post-content";
+      content.textContent = post.content;
 
-if (localStorage.getItem("thoughtly-theme") === "dark") {
-  document.body.classList.add("dark");
-}
+      article.append(header, content);
 
-// 18. LIVE UPDATES
+      if (currentUser && currentUser.id === post.user_id) {
+        const deleteButton = document.createElement("button");
+        deleteButton.className = "delete-btn";
+        deleteButton.textContent = "Delete post";
 
-let realtimeChannel = null;
+        deleteButton.addEventListener("click", async () => {
+          if (!confirm("Delete this thought?")) return;
 
-function startRealtime() {
-  if (realtimeChannel) {
-    db.removeChannel(realtimeChannel);
-  }
+          deleteButton.disabled = true;
 
-  realtimeChannel = db
-    .channel("thoughtly-community")
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "posts" },
-      () => loadFeed()
-    )
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "likes" },
-      () => loadFeed()
-    )
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "comments" },
-      event => {
-        const postId = event.new?.post_id || event.old?.post_id;
+          const { error } = await supabase
+            .from("posts")
+            .delete()
+            .eq("id", post.id);
 
-        if (postId) {
-          const container = $(`comments-${postId}`);
-
-          if (container && !container.classList.contains("hidden")) {
-            loadComments(postId);
+          if (error) {
+            alert(error.message);
+            deleteButton.disabled = false;
+            return;
           }
-        }
+
+          await loadPosts();
+        });
+
+        article.append(deleteButton);
       }
-    )
-    .subscribe();
+
+      container.append(article);
+    });
+  } catch (error) {
+    $("posts").textContent = "Couldn't load the feed: " + error.message;
+  }
 }
 
-// 19. START
+// Refresh feed.
+$("refreshBtn").addEventListener("click", loadPosts);
 
-async function startThoughtly() {
-  await initializeApp();
+// Log out.
+$("logoutBtn").addEventListener("click", async () => {
+  const { error } = await supabase.auth.signOut();
 
-  if (currentUser) {
-    startRealtime();
+  if (error) {
+    alert(error.message);
+    return;
   }
 
-  db.auth.onAuthStateChange((event, session) => {
-    if (event === "SIGNED_IN" && session) {
-      setTimeout(startRealtime, 0);
-    }
+  currentUser = null;
+  $("appSection").classList.add("hidden");
+  $("authSection").classList.remove("hidden");
+  $("logoutBtn").classList.add("hidden");
+  $("authForm").reset();
+  $("postMessage").textContent = "";
+  $("authMessage").textContent = "";
+  setMode("login");
+});
 
-    if (event === "SIGNED_OUT") {
-      if (realtimeChannel) {
-        db.removeChannel(realtimeChannel);
-        realtimeChannel = null;
-      }
-    }
-  });
+// Restore existing login session.
+const { data: { session } } = await supabase.auth.getSession();
+
+if (session) {
+  await showApp(session.user);
 }
 
-startThoughtly();
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === "SIGNED_OUT") {
+    currentUser = null;
+    $("appSection").classList.add("hidden");
+    $("authSection").classList.remove("hidden");
+    $("logoutBtn").classList.add("hidden");
+  }
+});
