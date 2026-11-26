@@ -4,152 +4,99 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#16834a">
-  <title>Thoughtly</title>
+  <meta name="theme-color" content="#101018">
+  <title>Thoughtly — Share your thoughts</title>
   <link rel="stylesheet" href="style.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+  <header class="topbar">
+    <a class="logo" href="#">thoughtly<span>.</span></a>
+    <span class="tagline">A place for your thoughts.</span>
+    <button id="logoutBtn" class="secondary hidden">Log out</button>
+  </header>
 
-  <div id="authScreen" class="auth-screen">
-    <div class="auth-card">
-      <div class="brand auth-brand">thoughtly<span>.</span></div>
-      <p class="auth-subtitle">A place for your thoughts.</p>
+  <main>
+    <section id="authSection" class="auth-card">
+      <h1>Welcome to Thoughtly.</h1>
+      <p class="muted">A little space for a lot of thoughts.</p>
 
-      <div class="auth-tabs">
-        <button class="auth-tab active" id="loginTab">Log in</button>
-        <button class="auth-tab" id="signupTab">Sign up</button>
+      <div class="tabs">
+        <button id="loginTab" class="tab active">Log in</button>
+        <button id="signupTab" class="tab">Sign up</button>
       </div>
 
       <form id="authForm">
         <div id="usernameField" class="hidden">
-          <label>Username</label>
-          <input id="usernameInput" type="text" placeholder="Choose a username" maxlength="24">
+          <label for="username">Username</label>
+          <input id="username" type="text"
+            placeholder="Choose a username"
+            minlength="3" maxlength="24"
+            pattern="[A-Za-z0-9_]+"
+            autocomplete="username">
         </div>
 
-        <label>Email address</label>
-        <input id="emailInput" type="email" placeholder="you@example.com" required>
+        <label for="email">Email</label>
+        <input id="email" type="email"
+          placeholder="you@example.com"
+          autocomplete="email" required>
 
-        <label>Password</label>
-        <input id="passwordInput" type="password" placeholder="At least 6 characters" required minlength="6">
+        <label for="password">Password</label>
+        <input id="password" type="password"
+          placeholder="Your password"
+          minlength="6"
+          autocomplete="current-password" required>
 
-        <button class="primary-btn auth-submit" type="submit" id="authSubmit">Log in</button>
+        <button id="authSubmit" class="primary full" type="submit">
+          Log in
+        </button>
       </form>
 
-      <p id="authMessage" class="message"></p>
-      <p class="auth-footer">Join the conversation. 🌱</p>
-    </div>
-  </div>
+      <p id="authMessage" class="message" role="status"></p>
+    </section>
 
-  <div id="app" class="hidden">
-
-    <header class="topbar">
-      <div class="topbar-inner">
-        <a href="#" class="brand">thoughtly<span>.</span></a>
-
-        <div class="search-box">
-          <span>⌕</span>
-          <input id="searchInput" type="search" placeholder="Search Thoughtly">
+    <section id="appSection" class="hidden">
+      <div class="welcome">
+        <div>
+          <p class="muted">YOUR COMMUNITY</p>
+          <h1>What's on your mind?</h1>
         </div>
-
-        <div class="top-actions">
-          <button class="icon-btn" id="homeBtn" title="Home">⌂</button>
-          <button class="icon-btn" id="themeBtn" title="Toggle dark mode">◐</button>
-          <button class="profile-mini" id="profileBtn">?</button>
-          <button class="logout-btn" id="logoutBtn">Log out</button>
+        <div class="user-pill">
+          <span class="avatar">✦</span>
+          <span id="currentUsername"></span>
         </div>
       </div>
-    </header>
 
-    <main class="layout">
-
-      <aside class="sidebar left-sidebar">
-        <div class="sidebar-profile">
-          <div class="avatar large" id="sideAvatar">?</div>
-          <div>
-            <strong id="sideName">Your profile</strong>
-            <small id="sideUsername">@username</small>
-          </div>
-        </div>
-
-        <nav class="side-nav">
-          <button class="nav-item active" id="feedNav">🏠 <span>News Feed</span></button>
-          <button class="nav-item" id="myPostsNav">📝 <span>My Posts</span></button>
-          <button class="nav-item" id="likedNav">💚 <span>Liked Posts</span></button>
-          <button class="nav-item" id="aboutNav">🌱 <span>About Thoughtly</span></button>
-        </nav>
-
-        <div class="sidebar-note">
-          <span>🌿</span>
-          <strong>Share something good.</strong>
-          <p>Your thoughts deserve a place to grow.</p>
-        </div>
-      </aside>
-
-      <section class="feed-column">
-
-        <div class="welcome-banner">
-          <div>
-            <p class="eyebrow">YOUR COMMUNITY</p>
-            <h1>What's growing today? 🌱</h1>
-            <p>Share your thoughts with everyone.</p>
-          </div>
-          <div class="banner-decoration">✳</div>
-        </div>
-
-        <section class="composer card">
-          <div class="composer-top">
-            <div class="avatar" id="composerAvatar">?</div>
-            <textarea id="postInput" maxlength="3000" placeholder="What's on your mind?"></textarea>
-          </div>
-
+      <section class="composer">
+        <h2>Share a thought</h2>
+        <form id="postForm">
+          <textarea id="postContent"
+            placeholder="Write something worth sharing..."
+            maxlength="1000" required></textarea>
           <div class="composer-bottom">
-            <span id="charCount">0 / 3000</span>
-            <button class="primary-btn" id="publishBtn">＋ Publish post</button>
+            <span class="muted">Up to 1,000 characters</span>
+            <button class="primary" type="submit">Publish thought</button>
           </div>
-        </section>
-
-        <div class="feed-heading">
-          <h2 id="feedTitle">Your feed</h2>
-          <span class="live-label"><span></span> Community</span>
-        </div>
-
-        <div id="feed" class="feed">
-          <div class="loading">Growing your feed...</div>
-        </div>
-
+        </form>
+        <p id="postMessage" class="message" role="status"></p>
       </section>
 
-      <aside class="sidebar right-sidebar">
-        <div class="card community-card">
-          <h3>🌿 Thoughtly community</h3>
-          <p>A little space for big thoughts, interesting conversations and good people.</p>
-          <div class="community-stat">
-            <span>Made for everyone</span>
-            <strong>💚</strong>
-          </div>
+      <section class="feed">
+        <div class="feed-heading">
+          <h2>Community feed</h2>
+          <button id="refreshBtn" class="secondary">Refresh</button>
         </div>
-
-        <div class="card tips-card">
-          <h3>Today's reminder</h3>
-          <div class="tip-icon">☀️</div>
-          <p>Every great conversation starts with someone willing to share an idea.</p>
+        <div id="posts">
+          <p class="muted">Loading thoughts...</p>
         </div>
+      </section>
+    </section>
+  </main>
 
-        <div class="right-footer">
-          Thoughtly © 2026<br>
-          Made for sharing.
-        </div>
-      </aside>
+  <footer>
+    <a class="logo" href="#">thoughtly<span>.</span></a>
+    <p>Made for people with something to say.</p>
+  </footer>
 
-    </main>
-  </div>
-
-  <div id="toast" class="toast"></div>
-
-  <script src="script.js"></script>
+  <script type="module" src="script.js"></script>
 </body>
 </html>
